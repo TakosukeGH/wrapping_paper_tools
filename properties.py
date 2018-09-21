@@ -14,20 +14,27 @@ logger = logging.getLogger("wrapping_paper_tools")
 
 # Properties
 class SVGSceneProperties(PropertyGroup):
+    script_is_executed = BoolProperty(default=False)
+    lock_init_project = BoolProperty(default=False)
+    # オブジェクト系
+    slide = FloatProperty(name="Slide", step=10, default=0.1)
+    slide_sub = FloatProperty(name="Slide", step=10, default=0.02)
+    # 出力系
+    export_path = StringProperty(name="Export path", subtype='FILE_PATH', description="Export path", default="//sample.svg")
+    # 枠・背景
+    draw_area = BoolProperty(default=False)
     height = IntProperty(name="Height", min=4, max=65536, default=3955)
     width = IntProperty(name="Width", min=4, max=65536, default=2825)
     scale = FloatProperty(name="Scale", min=0.00001, max=100000.0, step=1, default=100.0, precision=3)
-    export_path = StringProperty(name="Export path", subtype='FILE_PATH', description="Export path", default="//sample.svg")
-    set_group = StringProperty(name="Set group", description="Set group")
-    draw_area = BoolProperty(default=False)
-    slide = FloatProperty(name="Slide", step=10, default=0.1)
-    slide_sub = FloatProperty(name="Slide", step=10, default=0.02)
     use_background = BoolProperty(name="Use backGround", default=False)
     background_color = FloatVectorProperty(name="Background Color", subtype='COLOR', size=4, min=0, max=1, default=[0.8, 0.8, 0.8, 0.8])
-    script_is_executed = BoolProperty(default=False)
-    lock_init_project = BoolProperty(default=False)
+    # グループ
+    set_group = StringProperty(name="Set group", description="Set group")
+    # パターン系
     use_location_noise = BoolProperty(name="Use location noise", default=False)
-    distance = FloatProperty(name="Distance", min=0.0, soft_max=10, default=50.0, precision=3)
+    distance_x = FloatProperty(name="Distance X", min=0.0, default=500.0, precision=1)
+    distance_y = FloatProperty(name="Distance Y", min=0.0, default=500.0, precision=1)
+    offset_y = FloatProperty(name="Offset Y", min=0.0, default=0.0, precision=1)
     location_noise = FloatProperty(name="Location noise", min=0.0, soft_max=10, default=0.0, precision=3)
     use_rotation_noise = BoolProperty(name="Use rotation noise", default=False)
     rotation_noise = FloatProperty(name="Rotation noise", min=0.0, soft_max=math.radians(20), default=0.0, precision=3, unit='ROTATION')
@@ -172,6 +179,8 @@ class WPTToolPanel(Panel):
         row = col.row(align=True)
         row.scale_y = 2.0
         row.operator(SvgExporter.bl_idname, icon='EXPORT')
+        if not bpy.data.is_saved:
+            row.enabled = False
         row = col.row(align=True)
         row.operator(OpenSvg.bl_idname, icon='WORLD')
 
@@ -204,12 +213,27 @@ class WPTToolPanel(Panel):
         if wpt_scene_properties.use_background:
             row.prop(wpt_scene_properties, "background_color", text="")
 
-        row = layout.row()
-        row.prop(wpt_scene_properties, "distance")
+        layout.row().separator()
+
+        # パターン系
         row = layout.row()
         row.label("Pattern")
         row = layout.row()
         row.prop(wpt_scene_properties, "pattern_type", text="")
+
+        pattern = wpt_scene_properties.pattern_type
+        if pattern == "0": # Square lattice
+            col = layout.column(align=True)
+            row = col.row(align=True)
+            row.prop(wpt_scene_properties, "distance_x")
+            row = col.row(align=True)
+            row.prop(wpt_scene_properties, "distance_y")
+        elif pattern == "1": # Hexagonal lattice
+            col = layout.column(align=True)
+            row = col.row(align=True)
+            row.prop(wpt_scene_properties, "distance_x")
+            row = col.row(align=True)
+            row.prop(wpt_scene_properties, "offset_y")
 
         row = layout.row()
         row.prop(wpt_scene_properties, "use_location_noise")
@@ -228,7 +252,6 @@ class WPTToolPanel(Panel):
         row = layout.row()
         row.prop(wpt_scene_properties, "random_seed")
 
-        layout.row().separator()
 
 
 class OBJECT_PT_wpt_groups(Panel):
@@ -420,6 +443,9 @@ translations = {
         ("*", "Rotation noise"): "回転ノイズ",
         ("*", "Square lattice"): "正方格子",
         ("*", "Hexagonal lattice"): "六角格子",
+        ("*", "Distance X"): "距離 X",
+        ("*", "Distance Y"): "距離 Y",
+        ("*", "Offset Y"): "オフセット Y",
     }
 }
 

@@ -146,7 +146,6 @@ class SvgExporter(bpy.types.Operator):
     def create_points(self, width, height):
         wpt_scene_properties = bpy.context.scene.wpt_scene_properties
         random.seed(wpt_scene_properties.random_seed)
-        distance = wpt_scene_properties.distance
         pattern = wpt_scene_properties.pattern_type
         noise_limit = wpt_scene_properties.location_noise
         use_location_noise = wpt_scene_properties.use_location_noise
@@ -154,19 +153,25 @@ class SvgExporter(bpy.types.Operator):
         noise_y = 0
 
         if pattern == "0": # Square lattice
-            count_x = int(width/2) // distance
-            count_y = int(height/2) // distance
+            distance_x = wpt_scene_properties.distance_x
+            distance_y = wpt_scene_properties.distance_y
+
+            count_x = int(width/2) // int(distance_x)
+            count_y = int(height/2) // int(distance_y)
             for x in range(-count_x, count_x + 1, 1):
                 for y in range(-count_y, count_y + 1, 1):
                     if use_location_noise:
                         noise_x = random.uniform(-noise_limit, noise_limit)
                         noise_y = random.uniform(-noise_limit, noise_limit)
-                    point = mathutils.Vector((x * distance + noise_x, y * distance + noise_y))
+                    point = mathutils.Vector((x * distance_x + noise_x, y * distance_y + noise_y))
                     self.points.append(point)
 
         elif pattern == "1": # Hexagonal lattice
-            count_x = int(width/2) // int(distance)
-            distance_y = distance*math.sqrt(3)/2
+            distance_x = wpt_scene_properties.distance_x
+            offset_y = wpt_scene_properties.offset_y
+
+            count_x = int(width/2) // int(distance_x)
+            distance_y = distance_x*math.sqrt(3)/2 + offset_y
             count_y = int((height/2) // distance_y)
 
             for y in range(-count_y, count_y + 1, 1):
@@ -175,14 +180,14 @@ class SvgExporter(bpy.types.Operator):
                         if use_location_noise:
                             noise_x = random.uniform(-noise_limit, noise_limit)
                             noise_y = random.uniform(-noise_limit, noise_limit)
-                        point = mathutils.Vector((x * distance + noise_x, y * distance_y + noise_y))
+                        point = mathutils.Vector((x * distance_x + noise_x, y * distance_y + noise_y))
                         self.points.append(point)
                 else:
                     for x in range(-count_x - 1, count_x + 1, 1):
                         if use_location_noise:
                             noise_x = random.uniform(-noise_limit, noise_limit)
                             noise_y = random.uniform(-noise_limit, noise_limit)
-                        point = mathutils.Vector(((x + 1/2) * distance  + noise_x, y * distance_y + noise_y))
+                        point = mathutils.Vector(((x + 1/2) * distance_x  + noise_x, y * distance_y + noise_y))
                         self.points.append(point)
 
     def create_uses(self):
