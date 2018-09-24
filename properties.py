@@ -35,14 +35,16 @@ class SVGSceneProperties(PropertyGroup):
     distance_x = FloatProperty(name="Distance X", min=0.0, default=500.0, precision=1)
     distance_y = FloatProperty(name="Distance Y", min=0.0, default=500.0, precision=1)
     offset_y = FloatProperty(name="Offset Y", min=0.0, default=0.0, precision=1)
-    location_noise = FloatProperty(name="Location noise", min=0.0, soft_max=10, default=0.0, precision=3)
+    location_noise = FloatProperty(name="Location noise", min=0.0, default=0.0, precision=3)
     use_rotation_noise = BoolProperty(name="Use rotation noise", default=False)
     rotation_noise = FloatProperty(name="Rotation noise", min=0.0, soft_max=math.radians(20), default=0.0, precision=3, unit='ROTATION')
     random_seed = IntProperty(name="Seed", min=1, default=1)
     pattern_type = EnumProperty(
         name="Pattern type",
-        items=(('0', "Square lattice", ""),('1', "Hexagonal lattice", ""))
+        items=(('0', "Square lattice", ""),('1', "Hexagonal lattice", ""),('2', "Yagasuri", "")),
+        default='1'
     )
+    yagasuri_turn = BoolProperty(name="Turn", default=False)
 
 class SVGGroupProperties(PropertyGroup):
     export = BoolProperty(name="Export", default=False)
@@ -228,30 +230,42 @@ class WPTToolPanel(Panel):
             row.prop(wpt_scene_properties, "distance_x")
             row = col.row(align=True)
             row.prop(wpt_scene_properties, "distance_y")
-        elif pattern == "1": # Hexagonal lattice
+        elif pattern == "1" or pattern == "2": # Hexagonal lattice
             col = layout.column(align=True)
             row = col.row(align=True)
             row.prop(wpt_scene_properties, "distance_x")
             row = col.row(align=True)
             row.prop(wpt_scene_properties, "offset_y")
+        elif pattern == "1" or pattern == "2": # Hexagonal lattice
+            col = layout.column(align=True)
+            row = col.row(align=True)
+            row.prop(wpt_scene_properties, "distance_x")
+            row = col.row(align=True)
+            row.prop(wpt_scene_properties, "distance_y")
+            row = col.row(align=True)
+            row.prop(wpt_scene_properties, "offset_y")
 
-        row = layout.row()
-        row.prop(wpt_scene_properties, "use_location_noise")
-
-        if wpt_scene_properties.use_location_noise:
+        if pattern == "0" or pattern == "1":
             row = layout.row()
-            row.prop(wpt_scene_properties, "location_noise")
+            row.prop(wpt_scene_properties, "use_location_noise")
 
-        row = layout.row()
-        row.prop(wpt_scene_properties, "use_rotation_noise")
+            if wpt_scene_properties.use_location_noise:
+                row = layout.row()
+                row.prop(wpt_scene_properties, "location_noise")
 
-        if wpt_scene_properties.use_rotation_noise:
             row = layout.row()
-            row.prop(wpt_scene_properties, "rotation_noise")
+            row.prop(wpt_scene_properties, "use_rotation_noise")
 
-        row = layout.row()
-        row.prop(wpt_scene_properties, "random_seed")
+            if wpt_scene_properties.use_rotation_noise:
+                row = layout.row()
+                row.prop(wpt_scene_properties, "rotation_noise")
 
+            row = layout.row()
+            row.prop(wpt_scene_properties, "random_seed")
+
+        elif pattern == "2": # Yagasuri
+            row = layout.row()
+            row.prop(wpt_scene_properties, "yagasuri_turn")
 
 
 class OBJECT_PT_wpt_groups(Panel):
@@ -446,6 +460,7 @@ translations = {
         ("*", "Distance X"): "距離 X",
         ("*", "Distance Y"): "距離 Y",
         ("*", "Offset Y"): "オフセット Y",
+        ("*", "Yagasuri"): "矢絣",
     }
 }
 

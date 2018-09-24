@@ -23,6 +23,7 @@ class SvgExporter(bpy.types.Operator):
         self.groups = []
         self.objs = []
         self.points = []
+        self.points_c = []
         self.uses = []
         self.duplicate_objs = []
 
@@ -190,20 +191,56 @@ class SvgExporter(bpy.types.Operator):
                         point = mathutils.Vector(((x + 1/2) * distance_x  + noise_x, y * distance_y + noise_y))
                         self.points.append(point)
 
+        elif pattern == "2": # Yagasuri
+            scale = wpt_scene_properties.scale
+            distance_x = wpt_scene_properties.distance_x
+            distance_y = wpt_scene_properties.distance_y
+            offset_y = wpt_scene_properties.offset_y
+
+            count_x = int(width/2) // int(distance_x)
+            count_y = int(height/2) // int(distance_y)
+
+            for y in range(-count_y - 1, count_y + 1, 1):
+                for x in range(-count_x, count_x + 1, 1):
+                    point = mathutils.Vector((x * distance_x, y * distance_y))
+                    if wpt_scene_properties.yagasuri_turn:
+                        self.points_c.append(SVGPoint(point,0,180))
+                    else:
+                        self.points_c.append(SVGPoint(point,0))
+
+                for x in range(-count_x - 1, count_x + 1, 1):
+                    point = mathutils.Vector(((x + 1/2) * distance_x, y * distance_y - offset_y))
+                    self.points_c.append(SVGPoint(point,1))
+
     def create_uses(self):
+        logger.info("start")
         wpt_scene_properties = bpy.context.scene.wpt_scene_properties
         use_rotation_noise = wpt_scene_properties.use_rotation_noise
         noise_limit_degrees = wpt_scene_properties.rotation_noise
-        for point in self.points:
-            group = random.choice(self.groups)
 
-            use = self.svg.use(self.svg.symbol(id=group.name), insert=(point.x, -point.y), size=(100,100))
+        pattern = wpt_scene_properties.pattern_type
+        if pattern == "0" or pattern == "1": # Square lattice
+            for point in self.points:
+                group = random.choice(self.groups)
 
-            if use_rotation_noise:
-                noise_rotation_degrees = random.uniform(-noise_limit_degrees, noise_limit_degrees)
-                use.rotate(angle = math.degrees(noise_rotation_degrees), center = (point.x, -point.y))
+                use = self.svg.use(self.svg.symbol(id=group.name), insert=(point.x, -point.y), size=(100,100))
 
-            self.svg.add(use)
+                if use_rotation_noise:
+                    noise_rotation_degrees = random.uniform(-noise_limit_degrees, noise_limit_degrees)
+                    use.rotate(angle = math.degrees(noise_rotation_degrees), center = (point.x, -point.y))
+
+                self.svg.add(use)
+
+        elif pattern == "2":
+            for point in self.points_c:
+                group = self.groups[point.group]
+
+                use = self.svg.use(self.svg.symbol(id=group.name), insert=(point.location.x, -point.location.y), size=(100,100))
+
+                if point.rotate != 0:
+                    use.rotate(angle = point.rotate, center = (point.location.x, -point.location.y))
+
+                self.svg.add(use)
 
 class SVGPath():
     svg_matrix = mathutils.Matrix((
@@ -268,7 +305,11 @@ class SVGUse():
     def get_location(self):
         return mathutils.Vector((self.x, self.y, self.z))
 
-
+class SVGPoint():
+    def __init__(self, location, group, rotate=0):
+        self.location = location
+        self.group = group
+        self.rotate = rotate
 
 
 
