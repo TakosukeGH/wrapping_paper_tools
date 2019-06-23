@@ -27,6 +27,7 @@ class SVGSceneProperties(PropertyGroup):
     width = IntProperty(name="Width", min=4, max=65536, default=2825)
     scale = FloatProperty(name="Scale", min=0.00001, max=100000.0, step=1, default=100.0, precision=3)
     use_background = BoolProperty(name="Use backGround", default=False)
+    use_stripe_background = BoolProperty(name="Use stripe backGround", default=False)
     background_color = FloatVectorProperty(name="Background Color", subtype='COLOR', size=4, min=0, max=1, default=[0.8, 0.8, 0.8, 0.8])
     # グループ
     set_group = StringProperty(name="Set group", description="Set group")
@@ -41,10 +42,11 @@ class SVGSceneProperties(PropertyGroup):
     random_seed = IntProperty(name="Seed", min=1, default=1)
     pattern_type = EnumProperty(
         name="Pattern type",
-        items=(('0', "Square lattice", ""),('1', "Hexagonal lattice", ""),('2', "Yagasuri", "")),
+        items=(('0', "Square lattice", ""),('1', "Hexagonal lattice", ""),('2', "Yagasuri", ""),('3', "Circle packing", "")),
         default='1'
     )
     yagasuri_turn = BoolProperty(name="Turn", default=False)
+    group_index_offset = IntProperty(name="Group index offset", min=0, default=0)
 
 class SVGGroupProperties(PropertyGroup):
     export = BoolProperty(name="Export", default=False)
@@ -74,7 +76,7 @@ class InitProjectOperator(bpy.types.Operator):
     def screen_setting(self, context):
         screens = bpy.data.screens
 
-        screen_names = ["3D View Full", "Game Logic", "Motion Tracking", "Video Editing"]
+        screen_names = ["Animation", "3D View Full", "Game Logic", "Motion Tracking", "Video Editing"]
 
         for screen_name in screen_names:
             if screen_name in screens:
@@ -126,6 +128,9 @@ class WPTToolPanel(Panel):
         row.operator(AddCurveTool.bl_idname, icon='CURVE_BEZCIRCLE')
 
         col = layout.column(align=True)
+        if context.object is not None:
+            obj = context.object
+            col.prop(obj, "location", index=2)
         row = col.row(align=True)
         row.operator(UpObject.bl_idname, icon='TRIA_UP')
         row.operator(DownObject.bl_idname, icon='TRIA_DOWN')
@@ -150,21 +155,13 @@ class WPTToolPanel(Panel):
                     col.prop(mat, "diffuse_color", text="")
                     col.prop(mat, "alpha")
 
-        # グループ系
-        layout.row().separator()
+        col = layout.column(align=True)
+        col.operator("object.select_grouped").type = 'GROUP'
+        col.operator(UnrockObject.bl_idname, icon='UNLOCKED')
+        col.operator(RockObject.bl_idname, icon='LOCKED')
+        col.operator(ApplyObject.bl_idname, icon='FILE_TICK')
 
-        if context.object is not None:
-            for group in bpy.data.groups:
-                group_objects = group.objects
-                if context.object.name in group.objects and context.object in group_objects[:]:
-                    row = layout.row()
-                    row.label("Group")
-                    row = layout.row()
-                    row.prop(group, "name", text="")
-
-                    wpt_group_properties = group.wpt_group_properties
-                    row = layout.row()
-                    row.prop(wpt_group_properties, "export")
+        self.draw_group(context)
 
         # row = layout.row()
         # row.prop_search(wpt_scene_properties, "set_group", bpy.data, "groups", text="")
@@ -215,9 +212,39 @@ class WPTToolPanel(Panel):
         if wpt_scene_properties.use_background:
             row.prop(wpt_scene_properties, "background_color", text="")
 
+        row = layout.row()
+        row.prop(wpt_scene_properties, "use_stripe_background", text="Use stripe background")
+
         layout.row().separator()
 
-        # パターン系
+        self.draw_pattern(context)
+    def draw_group(self, context):
+        layout = self.layout
+        layout.row().separator()
+
+        if context.object is not None:
+            for group in bpy.data.groups:
+                group_objects = group.objects
+                if context.object.name in group.objects and context.object in group_objects[:]:
+                    row = layout.row()
+                    row.label("Group")
+                    row = layout.row()
+                    row.prop(group, "name", text="")
+
+                    wpt_group_properties = group.wpt_group_properties
+                    row = layout.row()
+                    row.prop(wpt_group_properties, "export")
+
+        col = layout.column(align=True)
+        row = col.row(align=True)
+        row.operator(SelectGroup.bl_idname, icon='CHECKBOX_HLT')
+        row = col.row(align=True)
+        row.operator(DeselectGroup.bl_idname, icon='CHECKBOX_DEHLT')
+
+    def draw_pattern(self, context):
+        wpt_scene_properties = context.scene.wpt_scene_properties
+        layout = self.layout
+
         row = layout.row()
         row.label("Pattern")
         row = layout.row()
@@ -267,6 +294,20 @@ class WPTToolPanel(Panel):
             row = layout.row()
             row.prop(wpt_scene_properties, "yagasuri_turn")
 
+        elif pattern == "3": # Circle packing
+            row = layout.row()
+            row.prop(wpt_scene_properties, "use_rotation_noise")
+
+            if wpt_scene_properties.use_rotation_noise:
+                col = layout.column(align=True)
+                row = col.row(align=True)
+                row.prop(wpt_scene_properties, "rotation_noise")
+                row = col.row(align=True)
+                row.prop(wpt_scene_properties, "random_seed")
+
+            col = layout.column(align=True)
+            row = col.row(align=True)
+            row.prop(wpt_scene_properties, "group_index_offset")
 
 class OBJECT_PT_wpt_groups(Panel):
     bl_space_type = 'PROPERTIES'
@@ -379,6 +420,65 @@ class ResetObject(Operator):
 
         return {'FINISHED'}
 
+class UnrockObject(Operator):
+    bl_idname = "wpt.unrockobject"
+    bl_label = "Unrock"
+
+    def invoke(self, context, event):
+        for obj in context.selected_objects:
+            obj.lock_location[0] = False
+            obj.lock_location[1] = False
+            obj.lock_scale[0] = False
+            obj.lock_scale[1] = False
+
+        return {'FINISHED'}
+
+class RockObject(Operator):
+    bl_idname = "wpt.rockobject"
+    bl_label = "Rock"
+
+    def invoke(self, context, event):
+        for obj in context.selected_objects:
+            obj.lock_location[0] = True
+            obj.lock_location[1] = True
+            obj.lock_scale[0] = True
+            obj.lock_scale[1] = True
+
+        return {'FINISHED'}
+
+class ApplyObject(Operator):
+    bl_idname = "wpt.applyobject"
+    bl_label = "Apply"
+
+    def invoke(self, context, event):
+        bpy.ops.view3d.view_all(center=True)
+        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
+        return {'FINISHED'}
+
+class SelectGroup(Operator):
+    bl_idname = "wpt.selectgroup"
+    bl_label = "Select All groups"
+
+    def invoke(self, context, event):
+        for group in bpy.data.groups:
+            wpt_group_properties = group.wpt_group_properties
+            wpt_group_properties.export = True
+
+        return {'FINISHED'}
+
+class DeselectGroup(Operator):
+    bl_idname = "wpt.deselectgroup"
+    bl_label = "Deselect All groups"
+
+    def invoke(self, context, event):
+        for group in bpy.data.groups:
+            wpt_group_properties = group.wpt_group_properties
+            wpt_group_properties.export = False
+
+        return {'FINISHED'}
+
 class OpenSvg(Operator):
     bl_idname = "wpt.opensvg"
     bl_label = "Open SVG"
@@ -451,16 +551,20 @@ translations = {
         ("*", "Base Settings"): "基本設定",
         ("*", "Export SVG"): "Export SVG",
         ("*", "Use background"): "背景色を使用",
+        ("*", "Use stripe background"): "縞模様背景を使用",
         ("*", "Use location noise"): "位置ノイズを使用",
         ("*", "Location noise"): "位置ノイズ",
         ("*", "Use rotation noise"): "回転ノイズを使用",
         ("*", "Rotation noise"): "回転ノイズ",
         ("*", "Square lattice"): "正方格子",
         ("*", "Hexagonal lattice"): "六角格子",
+        ("*", "Circle packing"): "円充填",
         ("*", "Distance X"): "距離 X",
         ("*", "Distance Y"): "距離 Y",
         ("*", "Offset Y"): "オフセット Y",
         ("*", "Yagasuri"): "矢絣",
+        ("*", "Select All groups"): "全てのグループを選択",
+        ("*", "Deselect All groups"): "全てのグループを解除",
     }
 }
 
