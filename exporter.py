@@ -1,11 +1,13 @@
-import math
-import svgwrite
-import random
 import bpy
-import logging
+import colorsys
+import csv
 import io
+import logging
+import math
 import mathutils
 import operator
+import random
+import svgwrite
 
 logger = logging.getLogger("wrapping_paper_tools")
 
@@ -49,6 +51,9 @@ class SvgExporter(bpy.types.Operator):
             rect = self.svg.rect(insert=(-width/2, -height/2), size=('100%', '100%'), rx=None, ry=None, fill=self.get_color(background_color), opacity=background_color[3])
             self.svg.add(rect)
 
+        if wpt_scene_properties.use_stripe_background:
+            self.add_stripe(width, height)
+
         self.get_objects()
         self.add_defs()
         self.create_points(width, height)
@@ -61,6 +66,18 @@ class SvgExporter(bpy.types.Operator):
         logger.info("end")
 
         return {'FINISHED'}
+
+    def add_stripe(self, width, height):
+        for row in bpy.data.texts["stripe_data.csv"].lines:
+            if not row.body:
+                continue
+
+            point, r, g, b = row.body.split(',')
+            # logger.debug("point: " + str(point))
+
+            svg_color = svgwrite.rgb(float(r),float(g),float(b))
+            rect = self.svg.rect(insert=(float(point), -height/2.0), size=('100%', '100%'), rx=None, ry=None, fill=svg_color, opacity=1.0)
+            self.svg.add(rect)
 
     def get_objects(self):
         for group in bpy.data.groups:
@@ -107,8 +124,10 @@ class SvgExporter(bpy.types.Operator):
 
             self.svg.defs.add(svg_group)
 
+            logger.debug("add group: " + group.name)
+
     def add_curve_data(self, obj, group):
-        logger.debug("add path: " + str(obj.name))
+        # logger.debug("add path: " + str(obj.name))
         color = self.get_diffuse_color(obj)
         alpha = self.get_alpha(obj)
         curve = obj.data
@@ -212,14 +231,28 @@ class SvgExporter(bpy.types.Operator):
                     point = mathutils.Vector(((x + 1/2) * distance_x, y * distance_y - offset_y))
                     self.points_c.append(SVGPoint(point,1))
 
+        elif pattern == "3": # Circle packing
+            # with open('circles_data.csv', 'r') as f:
+                # reader = csv.reader(f)
+            for row in bpy.data.texts["circles_data.csv"].lines:
+                if not row.body:
+                    continue
+
+                row_array = row.body.split(',')
+                self.points.append(SVGPoint(mathutils.Vector((float(row_array[0]), float(row_array[1]))), radius=float(row_array[2])))
+
     def create_uses(self):
         logger.info("start")
+
+        if len(self.groups) <= 0:
+            return 
+
         wpt_scene_properties = bpy.context.scene.wpt_scene_properties
         use_rotation_noise = wpt_scene_properties.use_rotation_noise
         noise_limit_degrees = wpt_scene_properties.rotation_noise
 
         pattern = wpt_scene_properties.pattern_type
-        if pattern == "0" or pattern == "1": # Square lattice
+        if pattern == "0" or pattern == "1": # Square lattice, Hexagonal lattice
             for point in self.points:
                 group = random.choice(self.groups)
 
@@ -241,6 +274,30 @@ class SvgExporter(bpy.types.Operator):
                     use.rotate(angle = point.rotate, center = (point.location.x, -point.location.y))
 
                 self.svg.add(use)
+
+        elif pattern == "3": # Circle packing
+            logger.info("start create uses for Circle packing")
+            transform_tmpl = "scale({0},{1}) translate({2},{3})"
+            group_index_offset = wpt_scene_properties.group_index_offset
+            for index, point in enumerate(self.points):
+                # group = random.choice(self.groups)
+                group = self.groups[(index + group_index_offset) % len(self.groups)]
+
+                # logger.info(point.radius)
+
+                scale = point.radius * self.scale * 0.0001
+                translate_x = -point.location.x * (1 - 1/scale)
+                translate_y = point.location.y * (1 - 1/scale)
+                transform = transform_tmpl.format(scale,scale,translate_x,translate_y)
+                use = self.svg.use(self.svg.symbol(id=group.name), insert=(point.location.x, -point.location.y), transform=transform)
+
+                if use_rotation_noise:
+                    noise_rotation_degrees = random.uniform(-noise_limit_degrees, noise_limit_degrees)
+                    use.rotate(angle = math.degrees(noise_rotation_degrees), center = (point.location.x, -point.location.y))
+
+                self.svg.add(use)
+
+            logger.info("end create uses for Circle packing")
 
 class SVGPath():
     svg_matrix = mathutils.Matrix((
@@ -306,10 +363,11 @@ class SVGUse():
         return mathutils.Vector((self.x, self.y, self.z))
 
 class SVGPoint():
-    def __init__(self, location, group, rotate=0):
+    def __init__(self, location, group=0, rotate=0.0, radius=0.0):
         self.location = location
         self.group = group
         self.rotate = rotate
+        self.radius = radius
 
 
 
