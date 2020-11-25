@@ -14,45 +14,43 @@ logger = logging.getLogger("wrapping_paper_tools")
 
 # Properties
 class SVGSceneProperties(PropertyGroup):
-    script_is_executed = BoolProperty(default=False)
-    lock_init_project = BoolProperty(default=False)
+    script_is_executed: BoolProperty(default=False)
+    lock_init_project: BoolProperty(default=False)
     # オブジェクト系
-    slide = FloatProperty(name="Slide", step=10, default=0.1)
-    slide_sub = FloatProperty(name="Slide", step=10, default=0.02)
+    slide: FloatProperty(name="Slide", step=10, default=0.1)
+    slide_sub: FloatProperty(name="Slide", step=10, default=0.02)
     # 出力系
-    export_path = StringProperty(name="Export path", subtype='FILE_PATH', description="Export path", default="//sample.svg")
+    export_path: StringProperty(name="Export path", subtype='FILE_PATH', description="Export path", default="//sample.svg")
     # 枠・背景
-    draw_area = BoolProperty(default=False)
-    height = IntProperty(name="Height", min=4, max=65536, default=3955)
-    width = IntProperty(name="Width", min=4, max=65536, default=2825)
-    scale = FloatProperty(name="Scale", min=0.00001, max=100000.0, step=1, default=100.0, precision=3)
-    use_background = BoolProperty(name="Use backGround", default=False)
-    use_stripe_background = BoolProperty(name="Use stripe backGround", default=False)
-    background_color = FloatVectorProperty(name="Background Color", subtype='COLOR', size=4, min=0, max=1, default=[0.8, 0.8, 0.8, 0.8])
-    # グループ
-    set_group = StringProperty(name="Set group", description="Set group")
+    draw_area: BoolProperty(default=False)
+    height: IntProperty(name="Height", min=4, max=65536, default=3955)
+    width: IntProperty(name="Width", min=4, max=65536, default=2825)
+    scale: FloatProperty(name="Scale", min=0.00001, max=100000.0, step=1, default=100.0, precision=3)
+    use_background: BoolProperty(name="Use backGround", default=False)
+    use_stripe_background: BoolProperty(name="Use stripe backGround", default=False)
+    background_color: FloatVectorProperty(name="Background Color", subtype='COLOR', size=4, min=0, max=1, default=[0.0, 0.0, 0.0, 1.0])
     # パターン系
-    use_location_noise = BoolProperty(name="Use location noise", default=False)
-    distance_x = FloatProperty(name="Distance X", min=0.0, default=500.0, precision=1)
-    distance_y = FloatProperty(name="Distance Y", min=0.0, default=500.0, precision=1)
-    offset_y = FloatProperty(name="Offset Y", min=0.0, default=0.0, precision=1)
-    location_noise = FloatProperty(name="Location noise", min=0.0, default=0.0, precision=3)
-    use_rotation_noise = BoolProperty(name="Use rotation noise", default=False)
-    rotation_noise = FloatProperty(name="Rotation noise", min=0.0, soft_max=math.radians(20), default=0.0, precision=3, unit='ROTATION')
-    random_seed = IntProperty(name="Seed", min=1, default=1)
-    pattern_type = EnumProperty(
+    use_location_noise: BoolProperty(name="Use location noise", default=False)
+    distance_x: FloatProperty(name="Distance X", min=0.0, default=500.0, precision=1)
+    distance_y: FloatProperty(name="Distance Y", min=0.0, default=500.0, precision=1)
+    offset_y: FloatProperty(name="Offset Y", min=0.0, default=0.0, precision=1)
+    location_noise: FloatProperty(name="Location noise", min=0.0, default=0.0, precision=3)
+    use_rotation_noise: BoolProperty(name="Use rotation noise", default=False)
+    rotation_noise: FloatProperty(name="Rotation noise", min=0.0, soft_max=math.radians(20), default=0.0, precision=3, unit='ROTATION')
+    random_seed: IntProperty(name="Seed", min=1, default=1)
+    pattern_type: EnumProperty(
         name="Pattern type",
         items=(('0', "Square lattice", ""),('1', "Hexagonal lattice", ""),('2', "Yagasuri", ""),('3', "Circle packing", "")),
         default='1'
     )
-    yagasuri_turn = BoolProperty(name="Turn", default=False)
-    group_index_offset = IntProperty(name="Group index offset", min=0, default=0)
+    yagasuri_turn: BoolProperty(name="Turn", default=False)
+    collection_index_offset: IntProperty(name="Group index offset", min=0, default=0)
 
-class SVGGroupProperties(PropertyGroup):
-    export = BoolProperty(name="Export", default=False)
+class SVGCollectionProperties(PropertyGroup):
+    export: BoolProperty(name="Export", default=False)
 
 # Operator
-class InitProjectOperator(bpy.types.Operator):
+class InitProjectOperator(Operator):
     bl_idname = "wpt.init_project_operator"
     bl_label = "Init Project"
     bl_options = {'REGISTER', 'UNDO'}
@@ -60,11 +58,12 @@ class InitProjectOperator(bpy.types.Operator):
     def invoke(self, context, event):
         logger.info("start")
 
-        bpy.ops.object.select_all(action='SELECT')
-        bpy.ops.object.delete()
+        logger.info("check4")
 
-        self.screen_setting(context)
-        self.scene_setting(context.scene)
+        bpy.ops.object.select_all(action='SELECT')
+        if len(bpy.context.selected_objects) > 0:
+            bpy.ops.object.delete()
+
         self.area_setting()
 
         context.scene.wpt_scene_properties.script_is_executed = True
@@ -73,43 +72,25 @@ class InitProjectOperator(bpy.types.Operator):
 
         return {'FINISHED'}
 
-    def screen_setting(self, context):
-        screens = bpy.data.screens
-
-        screen_names = ["Animation", "3D View Full", "Game Logic", "Motion Tracking", "Video Editing"]
-
-        for screen_name in screen_names:
-            if screen_name in screens:
-                bpy.ops.screen.delete({'screen': screens[screen_name]})
-
-        context.window.screen = screens['Default']
-
-    def scene_setting(self, scene):
-        scene.render.engine = 'CYCLES'
-
     def area_setting(self):
         for screen in bpy.data.screens:
             for area in screen.areas:
-                if area.type == 'VIEW_3D':
+                if area.ui_type == 'VIEW_3D':
                     override = bpy.context.copy()
                     override["window"] = bpy.context.window
                     override["screen"] = screen
                     override["area"] = area
                     bpy.ops.view3d.view_persportho(override)
-                    bpy.ops.view3d.viewnumpad(override, type='TOP')
+                    bpy.ops.view3d.view_axis(override, type='TOP')
 
                     logger.debug("area_setting in:" + screen.name)
 
-                    for space in area.spaces:
-                        space.use_occlude_geometry = False
-                        # space.lens = 50
-
 # UI
-class WPTToolPanel(Panel):
+class VIEW3D_PT_tools_wpt(Panel):
     bl_idname = "OBJECT_PT_wpt"
     bl_label = "Wrapping Paper Tools"
     bl_space_type = 'VIEW_3D'
-    bl_region_type = 'TOOLS'
+    bl_region_type = 'UI'
     bl_category = 'WPT'
 
     def draw(self, context):
@@ -118,7 +99,7 @@ class WPTToolPanel(Panel):
         if not wpt_scene_properties.script_is_executed:
             row = self.layout.row()
             row.scale_y = 2.0
-            row.operator(InitProjectOperator.bl_idname, text=pgettext(InitProjectOperator.bl_label), icon='LOAD_FACTORY')
+            row.operator(InitProjectOperator.bl_idname, text=pgettext(InitProjectOperator.bl_label), icon='FILE_BLEND')
             return
 
         layout = self.layout
@@ -151,28 +132,29 @@ class WPTToolPanel(Panel):
                     row = layout.row()
                     row.template_ID(obj, "active_material", new="material.new")
                     col = layout.column(align=True)
-                    # col.label("Viewport Color:")
+                    # col.label(text="Viewport Color:")
                     col.prop(mat, "diffuse_color", text="")
-                    col.prop(mat, "alpha")
 
         col = layout.column(align=True)
-        col.operator("object.select_grouped").type = 'GROUP'
+        col.operator("object.select_grouped").type = 'COLLECTION'
         col.operator(UnrockObject.bl_idname, icon='UNLOCKED')
         col.operator(RockObject.bl_idname, icon='LOCKED')
         col.operator(ApplyObject.bl_idname, icon='FILE_TICK')
 
-        self.draw_group(context)
-
-        # row = layout.row()
-        # row.prop_search(wpt_scene_properties, "set_group", bpy.data, "groups", text="")
+        self.draw_collection(context)
 
         # 出力系
         layout.row().separator()
 
         row = layout.row()
-        row.label("Output")
+        row.label(text="Output")
         row = layout.row()
         row.prop(wpt_scene_properties, "export_path", text="")
+
+        if not bpy.data.is_saved:
+            row = layout.row()
+            row.alert = True
+            row.label(text="File has not been saved.")
 
         col = layout.column(align=True)
         row = col.row(align=True)
@@ -187,7 +169,7 @@ class WPTToolPanel(Panel):
         layout.row().separator()
 
         row = layout.row()
-        row.label("Background")
+        row.label(text="Background")
 
         row = layout.row()
         if wpt_scene_properties.draw_area is False:
@@ -218,35 +200,36 @@ class WPTToolPanel(Panel):
         layout.row().separator()
 
         self.draw_pattern(context)
-    def draw_group(self, context):
+
+    def draw_collection(self, context):
         layout = self.layout
         layout.row().separator()
 
         if context.object is not None:
-            for group in bpy.data.groups:
-                group_objects = group.objects
-                if context.object.name in group.objects and context.object in group_objects[:]:
+            for collection in bpy.data.collections:
+                if context.object.name in collection.objects:
+                # if context.object.name in collection.objects and context.object in collection.objects[:]:
                     row = layout.row()
-                    row.label("Group")
+                    row.label(text="Group")
                     row = layout.row()
-                    row.prop(group, "name", text="")
+                    row.prop(collection, "name", text="")
 
-                    wpt_group_properties = group.wpt_group_properties
+                    wpt_collection_properties = collection.wpt_collection_properties
                     row = layout.row()
-                    row.prop(wpt_group_properties, "export")
+                    row.prop(wpt_collection_properties, "export")
 
         col = layout.column(align=True)
         row = col.row(align=True)
-        row.operator(SelectGroup.bl_idname, icon='CHECKBOX_HLT')
+        row.operator(SelectCollection.bl_idname, icon='CHECKBOX_HLT')
         row = col.row(align=True)
-        row.operator(DeselectGroup.bl_idname, icon='CHECKBOX_DEHLT')
+        row.operator(DeselectCollection.bl_idname, icon='CHECKBOX_DEHLT')
 
     def draw_pattern(self, context):
         wpt_scene_properties = context.scene.wpt_scene_properties
         layout = self.layout
 
         row = layout.row()
-        row.label("Pattern")
+        row.label(text="Pattern")
         row = layout.row()
         row.prop(wpt_scene_properties, "pattern_type", text="")
 
@@ -307,9 +290,9 @@ class WPTToolPanel(Panel):
 
             col = layout.column(align=True)
             row = col.row(align=True)
-            row.prop(wpt_scene_properties, "group_index_offset")
+            row.prop(wpt_scene_properties, "collection_index_offset")
 
-class OBJECT_PT_wpt_groups(Panel):
+class OBJECT_PT_wpt_collections(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "object"
@@ -318,12 +301,12 @@ class OBJECT_PT_wpt_groups(Panel):
     def draw(self, context):
         layout = self.layout
         obj = context.object
-        for group in bpy.data.groups:
-            group_objects = group.objects
-            if obj.name in group.objects and obj in group_objects[:]:
-                layout.prop(group, "name", text="")
-                wpt_group_properties = group.wpt_group_properties
-                layout.prop(wpt_group_properties, "export")
+        for collection in bpy.data.collections:
+            collection_objects = collection.objects
+            if obj.name in collection.objects and obj in collection_objects[:]:
+                layout.prop(collection, "name", text="")
+                wpt_collection_properties = collection.wpt_collection_properties
+                layout.prop(wpt_collection_properties, "export")
 
 # op
 class AddCurveTool(Operator):
@@ -331,37 +314,44 @@ class AddCurveTool(Operator):
     bl_label = "Add curve"
 
     def invoke(self, context, event):
+        if context.object is not None:
+            bpy.ops.object.mode_set(mode='OBJECT')
+
         loc_z = 0.0
-        use_group = False
-        group = None
-        if len(context.selected_objects) > 0:
-            loc_z = context.object.location[2] + context.scene.wpt_scene_properties.slide
-            for g in bpy.data.groups:
-                if context.object.name in g.objects:
-                    group = g
-                    break
+        collection = None
 
-        loc=(0.0, 0.0, loc_z)
+        # 選択中のオブジェクトのZ位置とコレクションを取得
+        if len(bpy.data.objects) <= 0:
+            collection = context.view_layer.active_layer_collection.collection
+        elif len(context.selected_objects) > 0:
+            loc_z = context.object.location.z + context.scene.wpt_scene_properties.slide
+            collections = context.object.users_collection
+            if len(collections) > 0:
+                collection = collections[0]
 
-        if group is None:
-            group = bpy.data.groups.new("Group")
+        loc = (0.0, 0.0, loc_z)
 
+        if collection is None:
+            collection = bpy.data.collections.new("Collection")
+            context.scene.collection.children.link(collection)
+
+        collection.wpt_collection_properties.export = True
+        layer_collection = context.view_layer.layer_collection.children[collection.name]
+        context.view_layer.active_layer_collection = layer_collection
         bpy.ops.curve.primitive_bezier_circle_add(location=loc)
         obj = context.object
-        group.objects.link(obj)
-        group.wpt_group_properties.export = True
 
         obj.lock_location = (True, True, True)
         obj.lock_rotation = (True, True, True)
         obj.lock_scale = (True, True, True)
 
         curve = obj.data
-
         curve.dimensions = '2D'
         curve.resolution_u = 5
+        curve.fill_mode = 'FRONT'
 
         mat = bpy.data.materials.new(name="wpt_material")
-        mat.diffuse_color = (1.0, 1.0, 1.0)
+        mat.diffuse_color = (1.0, 1.0, 1.0, 1.0)
         curve.materials.append(mat)
 
         return {'FINISHED'}
@@ -457,25 +447,23 @@ class ApplyObject(Operator):
 
         return {'FINISHED'}
 
-class SelectGroup(Operator):
-    bl_idname = "wpt.selectgroup"
-    bl_label = "Select All groups"
+class SelectCollection(Operator):
+    bl_idname = "wpt.selectcollection"
+    bl_label = "Select All Collections"
 
     def invoke(self, context, event):
-        for group in bpy.data.groups:
-            wpt_group_properties = group.wpt_group_properties
-            wpt_group_properties.export = True
+        for collection in bpy.data.collections:
+            collection.wpt_collection_properties.export = True
 
         return {'FINISHED'}
 
-class DeselectGroup(Operator):
-    bl_idname = "wpt.deselectgroup"
-    bl_label = "Deselect All groups"
+class DeselectCollection(Operator):
+    bl_idname = "wpt.deselectcollection"
+    bl_label = "Deselect All Collections"
 
     def invoke(self, context, event):
-        for group in bpy.data.groups:
-            wpt_group_properties = group.wpt_group_properties
-            wpt_group_properties.export = False
+        for collection in bpy.data.collections:
+            collection.wpt_collection_properties.export = False
 
         return {'FINISHED'}
 
@@ -563,18 +551,48 @@ translations = {
         ("*", "Distance Y"): "距離 Y",
         ("*", "Offset Y"): "オフセット Y",
         ("*", "Yagasuri"): "矢絣",
-        ("*", "Select All groups"): "全てのグループを選択",
-        ("*", "Deselect All groups"): "全てのグループを解除",
+        ("*", "Select All Collections"): "全てのコレクションを選択",
+        ("*", "Deselect All Collections"): "全てのコレクションを解除",
     }
 }
 
+classes = (
+    SVGSceneProperties,
+    SVGCollectionProperties,
+    InitProjectOperator,
+    VIEW3D_PT_tools_wpt,
+    OBJECT_PT_wpt_collections,
+    AddCurveTool,
+    UpObject,
+    DownObject,
+    UpObjectSub,
+    DownObjectSub,
+    ResetObject,
+    UnrockObject,
+    RockObject,
+    ApplyObject,
+    SelectCollection,
+    DeselectCollection,
+    OpenSvg,
+    RunHintDisplayButton,
+)
+
 def register():
+    from bpy.utils import register_class
+    for cls in classes:
+        register_class(cls)
+
     bpy.types.Scene.wpt_scene_properties = PointerProperty(type=SVGSceneProperties)
-    bpy.types.Group.wpt_group_properties = PointerProperty(type=SVGGroupProperties)
+    bpy.types.Collection.wpt_collection_properties = PointerProperty(type=SVGCollectionProperties)
 
     bpy.app.translations.register(__name__, translations)
 
 def unregister():
     bpy.app.translations.unregister(__name__)
+    del bpy.types.Collection.wpt_collection_properties
     del bpy.types.Scene.wpt_scene_properties
+
+    from bpy.utils import unregister_class
+    for cls in classes:
+        unregister_class(cls)
 

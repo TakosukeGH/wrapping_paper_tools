@@ -22,7 +22,7 @@ class SvgExporter(bpy.types.Operator):
     def __init__(self):
         logger.info("start")
 
-        self.groups = []
+        self.collections = []
         self.objs = []
         self.points = []
         self.points_c = []
@@ -80,17 +80,17 @@ class SvgExporter(bpy.types.Operator):
             self.svg.add(rect)
 
     def get_objects(self):
-        for group in bpy.data.groups:
-            if not group.wpt_group_properties.export:
+        for collection in bpy.data.collections:
+            if not collection.wpt_collection_properties.export:
                 continue
 
-            if len(group.objects) <= 0:
+            if len(collection.objects) <= 0:
                 continue
 
-            self.groups.append(group)
+            self.collections.append(collection)
 
         for obj in bpy.data.objects:
-            if not obj.is_visible(bpy.context.scene):
+            if obj.hide_viewport:
                 continue
 
             if obj.type != 'CURVE':
@@ -115,21 +115,20 @@ class SvgExporter(bpy.types.Operator):
             self.objs.append(obj)
 
     def add_defs(self):
-        for group in self.groups:
-            svg_group = self.svg.g(id=group.name)
+        for collection in self.collections:
+            svg_group = self.svg.g(id=collection.name)
 
             # z位置が小さい順にsvgを定義していく
-            for obj in sorted(group.objects, key=lambda obj: obj.location.z):
+            for obj in sorted(collection.objects, key=lambda obj: obj.location.z):
                 self.add_curve_data(obj, svg_group)
 
             self.svg.defs.add(svg_group)
 
-            logger.debug("add group: " + group.name)
+            logger.debug("add group: " + collection.name)
 
     def add_curve_data(self, obj, group):
         # logger.debug("add path: " + str(obj.name))
-        color = self.get_diffuse_color(obj)
-        alpha = self.get_alpha(obj)
+        color, alpha = self.get_diffuse_color(obj)
         curve = obj.data
         matrix_world = obj.matrix_world
         scale = bpy.context.scene.wpt_scene_properties.scale
@@ -150,7 +149,7 @@ class SvgExporter(bpy.types.Operator):
     def get_diffuse_color(self, obj):
         material = obj.data.materials[0]
         diffuse_color = material.diffuse_color
-        return self.get_color(diffuse_color)
+        return self.get_color(diffuse_color), diffuse_color[3]
 
     def get_color(self, color):
         gamma = 2.2
@@ -158,10 +157,6 @@ class SvgExporter(bpy.types.Operator):
         g = 255 * pow(color[1], 1/gamma)
         b = 255 * pow(color[2], 1/gamma)
         return svgwrite.rgb(r,g,b)
-
-    def get_alpha(self, obj):
-        material = obj.data.materials[0]
-        return material.alpha
 
     def create_points(self, width, height):
         wpt_scene_properties = bpy.context.scene.wpt_scene_properties
@@ -244,8 +239,8 @@ class SvgExporter(bpy.types.Operator):
     def create_uses(self):
         logger.info("start")
 
-        if len(self.groups) <= 0:
-            return 
+        if len(self.collections) <= 0:
+            return
 
         wpt_scene_properties = bpy.context.scene.wpt_scene_properties
         use_rotation_noise = wpt_scene_properties.use_rotation_noise
@@ -254,9 +249,9 @@ class SvgExporter(bpy.types.Operator):
         pattern = wpt_scene_properties.pattern_type
         if pattern == "0" or pattern == "1": # Square lattice, Hexagonal lattice
             for point in self.points:
-                group = random.choice(self.groups)
+                collection = random.choice(self.collections)
 
-                use = self.svg.use(self.svg.symbol(id=group.name), insert=(point.x, -point.y), size=(100,100))
+                use = self.svg.use(self.svg.symbol(id=collection.name), insert=(point.x, -point.y), size=(100,100))
 
                 if use_rotation_noise:
                     noise_rotation_degrees = random.uniform(-noise_limit_degrees, noise_limit_degrees)
@@ -266,9 +261,9 @@ class SvgExporter(bpy.types.Operator):
 
         elif pattern == "2":
             for point in self.points_c:
-                group = self.groups[point.group]
+                collection = self.collections[point.collection]
 
-                use = self.svg.use(self.svg.symbol(id=group.name), insert=(point.location.x, -point.location.y), size=(100,100))
+                use = self.svg.use(self.svg.symbol(id=collection.name), insert=(point.location.x, -point.location.y), size=(100,100))
 
                 if point.rotate != 0:
                     use.rotate(angle = point.rotate, center = (point.location.x, -point.location.y))
@@ -278,10 +273,9 @@ class SvgExporter(bpy.types.Operator):
         elif pattern == "3": # Circle packing
             logger.info("start create uses for Circle packing")
             transform_tmpl = "scale({0},{1}) translate({2},{3})"
-            group_index_offset = wpt_scene_properties.group_index_offset
+            collection_index_offset = wpt_scene_properties.collection_index_offset
             for index, point in enumerate(self.points):
-                # group = random.choice(self.groups)
-                group = self.groups[(index + group_index_offset) % len(self.groups)]
+                collection = self.collections[(index + collection_index_offset) % len(self.collections)]
 
                 # logger.info(point.radius)
 
@@ -289,7 +283,7 @@ class SvgExporter(bpy.types.Operator):
                 translate_x = -point.location.x * (1 - 1/scale)
                 translate_y = point.location.y * (1 - 1/scale)
                 transform = transform_tmpl.format(scale,scale,translate_x,translate_y)
-                use = self.svg.use(self.svg.symbol(id=group.name), insert=(point.location.x, -point.location.y), transform=transform)
+                use = self.svg.use(self.svg.symbol(id=collection.name), insert=(point.location.x, -point.location.y), transform=transform)
 
                 if use_rotation_noise:
                     noise_rotation_degrees = random.uniform(-noise_limit_degrees, noise_limit_degrees)
@@ -347,7 +341,7 @@ class SVGPath():
         v = vec.copy()
         v.resize_4d()
 
-        w = self.svg_matrix * v
+        w = self.svg_matrix @ v
         w = w * self.scale
         w.resize_3d()
         return w
@@ -363,12 +357,25 @@ class SVGUse():
         return mathutils.Vector((self.x, self.y, self.z))
 
 class SVGPoint():
-    def __init__(self, location, group=0, rotate=0.0, radius=0.0):
+    def __init__(self, location, collection=0, rotate=0.0, radius=0.0):
         self.location = location
-        self.group = group
+        self.collection = collection
         self.rotate = rotate
         self.radius = radius
 
+classes = (
+    SvgExporter,
+)
+
+def register():
+    from bpy.utils import register_class
+    for cls in classes:
+        register_class(cls)
+
+def unregister():
+    from bpy.utils import unregister_class
+    for cls in classes:
+        unregister_class(cls)
 
 
 

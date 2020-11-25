@@ -2,7 +2,7 @@ bl_info= {
     "name": "Wrapping Paper Tools",
     "author": "Takosuke",
     "version": (0, 0, 1),
-    "blender": (2, 79, 0),
+    "blender": (2, 80, 0),
     "location": "View3D > Tools Panel",
     "description": "Wrapping Paper Tools.",
     "support": "COMMUNITY",
@@ -12,14 +12,19 @@ bl_info= {
     "category": 'Import-Export'}
 
 if "bpy" in locals():
-    import imp
-    imp.reload(properties)
-    imp.reload(exporter)
-else:
-    from . import properties, exporter
+    import importlib
+    if "properties" in locals():
+        importlib.reload(properties)
+    if "exporter" in locals():
+        importlib.reload(exporter)
 
 import bpy
 import logging
+  
+from . import (
+    properties,
+    exporter,
+)
 
 logger = logging.getLogger("wrapping_paper_tools")
 
@@ -33,12 +38,12 @@ if not logger.handlers:
 logger.debug("init logger") # debug, info, warning, error, critical
 
 def register():
-    bpy.utils.register_module(__name__)
     properties.register()
+    exporter.register()
 
 def unregister():
     properties.unregister()
-    bpy.utils.unregister_module(__name__)
+    exporter.unregister()
 
 if __name__ == "__main__":
     register()
